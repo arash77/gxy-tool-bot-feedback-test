@@ -1,0 +1,321 @@
+# TEST copy of gxy-tool-bot workflows/on-pr-feedback.yml (d-callan/gxy-tool-bot#37); only TEST: steps and the bot install differ.
+on:
+  pull_request:
+    types: [labeled]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "PR number to address feedback on"
+        required: true
+        type: string
+      max_iterations:
+        description: "Override max tool iterations per round (blank = config default)"
+        required: false
+        type: string
+        default: ""
+      max_retries:
+        description: "Override max validation retry rounds (blank = config default)"
+        required: false
+        type: string
+        default: ""
+
+# Three jobs so no job holds both the LLM key and a GitHub write token:
+#   start   — write token, no key: fork check, status comment, label removal
+#   fix     — LLM key, read-only token: runs the bot on the PR branch and
+#             uploads the edited tool directory, comments and commit message
+#   publish — write token, no key: checks the upload, commits, pushes, posts
+#
+# Shared group with on-pr-review: a review run must wait for a feedback
+# run to finish pushing, or it reports findings on superseded files.
+concurrency:
+  group: pr-${{ github.event.pull_request.number || inputs.pr_number }}
+  cancel-in-progress: false
+
+env:
+  PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr_number }}
+
+jobs:
+  start:
+    name: Start feedback
+    # Dual-match: both the prefixed (tool-bot:*) and original unprefixed label
+    # names trigger. If your repo only has the prefixed labels (e.g. created by
+    # scripts/create-labels.sh), you can drop the unprefixed alternative.
+    if: contains(github.event.pull_request.labels.*.name, 'tool-bot:address-feedback') || contains(github.event.pull_request.labels.*.name, 'address-feedback') || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # No checkout in this job — gh needs the repo spelled out.
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Check PR is not from a fork
+        run: |
+          HEAD_REPO=$(gh pr view $PR_NUMBER --json headRepository --jq '.headRepository.nameWithOwner')
+          if [ "$HEAD_REPO" != "${{ github.repository }}" ]; then
+            # Label-triggered runs on fork PRs get a read-only token, so a
+            # comment can't post anyway — the log line is the message.
+            echo "PR head is on fork $HEAD_REPO — feedback requires same-repo branches."
+            exit 1
+          fi
+      - name: Post status comment
+        run: |
+          gh pr comment $PR_NUMBER --body "🔧 Addressing feedback — [view progress](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
+      - name: Remove address-feedback label
+        run: |
+          # Remove whichever spelling(s) exist — prefixed and legacy.
+          gh pr edit $PR_NUMBER --remove-label "tool-bot:address-feedback" || true
+          gh pr edit $PR_NUMBER --remove-label "address-feedback" || true
+
+  fix:
+    name: Address PR Feedback
+    needs: start
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+      actions: read
+      checks: read
+    outputs:
+      tool_dir: ${{ steps.find_tool_dir.outputs.tool_dir }}
+      outcome: ${{ steps.address.outcome }}
+    steps:
+      # refs/pull/<N>/head lives on the base repo, and also resolves for
+      # workflow_dispatch runs, where pull_request is null.
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: refs/pull/${{ env.PR_NUMBER }}/head
+          fetch-depth: 0
+      - name: Restore config from default branch
+        run: |
+          git fetch origin ${{ github.event.repository.default_branch }}
+          git checkout FETCH_HEAD -- .gxy-tool-bot.yml
+      # TEST: fake LLM inside the job, recording what the bot sends.
+      - name: "TEST: start fake LLM"
+        run: |
+          git show FETCH_HEAD:.github/fake-llm/fake_llm.py > /tmp/fake_llm.py
+          nohup python3 /tmp/fake_llm.py 18765 /tmp/llm-requests.jsonl > /tmp/fake_llm.log 2>&1 &
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install --no-cache-dir "git+https://github.com/arash77/gxy-tool-bot@b6e5116b04363f8ee4267d83344725d40a7fa676"
+      # planemo goes in its own venv, off PATH, only for the format step below.
+      - name: Install planemo off PATH
+        run: |
+          python -m venv "$RUNNER_TEMP/planemo"
+          "$RUNNER_TEMP/planemo/bin/pip" install --no-cache-dir "planemo>=0.75.43"
+      # The bot offers its planemo_test / run_in_conda (shell) tools whenever
+      # planemo, micromamba or conda is on PATH, and this job holds the LLM
+      # key — so none of them may be. PR CI already lints and tests.
+      # The runner image symlinks /usr/bin/conda.
+      - name: Keep shell tools off PATH
+        run: |
+          sudo rm -f /usr/bin/conda
+          for t in planemo micromamba conda; do
+            if command -v "$t" >/dev/null; then
+              echo "::error::$t is on PATH, the feedback bot would get shell tools"
+              exit 1
+            fi
+          done
+      - name: Find tool directory
+        id: find_tool_dir
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # PR title format: "tool_dir: auto-generated tool wrapper (issue #N)"
+          PR_TITLE=$(gh pr view $PR_NUMBER --json title --jq '.title' 2>/dev/null || echo "")
+          TOOL_DIR=$(echo "$PR_TITLE" | cut -d':' -f1 | xargs)
+          # Fallback: check for .tool-name in the PR branch (find, not a
+          # glob test — a bare tools/*/ glob errors on multiple matches).
+          TOOL_NAME_FILE=$(find tools -maxdepth 2 -name .tool-name 2>/dev/null | head -1)
+          if [ -z "$TOOL_DIR" ] && [ -n "$TOOL_NAME_FILE" ]; then
+            TOOL_DIR=$(head -1 "$TOOL_NAME_FILE" 2>/dev/null)
+          fi
+          # Fallback: derive from the PR's changed files under tools/
+          if [ -z "$TOOL_DIR" ]; then
+            TOOL_DIR=$(gh pr diff $PR_NUMBER --name-only | grep -oP '^tools/\K[^/]+' | sort -u | head -1)
+            [ -n "$TOOL_DIR" ] && echo "Derived tool directory from PR diff: $TOOL_DIR"
+          fi
+          if [ -z "$TOOL_DIR" ]; then
+            echo "Could not determine tool directory from PR title, .tool-name, or changed files"
+            exit 1
+          fi
+          # TOOL_DIR feeds 'rm -rf tools/$TOOL_DIR' later — reject anything
+          # that isn't a plain directory name (traversal via a retitled PR).
+          if [[ ! "$TOOL_DIR" =~ ^[A-Za-z0-9_.-]+$ ]]; then
+            echo "Refusing unsafe tool directory name: $TOOL_DIR"
+            exit 1
+          fi
+          echo "tool_dir=$TOOL_DIR" >> $GITHUB_OUTPUT
+          echo "Found tool directory: $TOOL_DIR"
+      - name: Address feedback
+        id: address
+        # Failures are reported by the publish job.
+        continue-on-error: true
+        env:
+          GXY_TOOL_BOT_API_KEY: ${{ secrets.GXY_TOOL_BOT_API_KEY }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REF_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          MAX_ITERATIONS_INPUT: ${{ inputs.max_iterations }}
+          MAX_RETRIES_INPUT: ${{ inputs.max_retries }}
+        run: |
+          OVERRIDE_ARGS=()
+          if [ -n "$MAX_ITERATIONS_INPUT" ]; then
+            OVERRIDE_ARGS+=(--max-iterations "$MAX_ITERATIONS_INPUT")
+          fi
+          if [ -n "$MAX_RETRIES_INPUT" ]; then
+            OVERRIDE_ARGS+=(--max-retries "$MAX_RETRIES_INPUT")
+          fi
+          gxy-tool-bot address-feedback \
+            --pr $PR_NUMBER \
+            --config .gxy-tool-bot.yml \
+            --tool-dir tools/${{ steps.find_tool_dir.outputs.tool_dir }} \
+            --actor ${{ github.event.sender.login || 'manual' }} \
+            --commit-msg-path "$RUNNER_TEMP/result/commit-msg" \
+            --comment-dir "$RUNNER_TEMP/result/comments" \
+            "${OVERRIDE_ARGS[@]}"
+      - name: Format updated XML with planemo
+        if: steps.address.outcome == 'success'
+        run: |
+          "$RUNNER_TEMP/planemo/bin/planemo" format --recursive tools/${{ steps.find_tool_dir.outputs.tool_dir }}/
+      - name: Collect result
+        if: always()
+        env:
+          TOOL_DIR: ${{ steps.find_tool_dir.outputs.tool_dir }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/result"
+          if [ "${{ steps.address.outcome }}" = "success" ]; then
+            cp -a "tools/$TOOL_DIR" "$RUNNER_TEMP/result/tool"
+            rm -f "$RUNNER_TEMP/result/tool/.tool-name"
+          fi
+          # Flag files the CLI writes for the publish job.
+          for f in .gave-up .validation-failed; do
+            [ -f "$GITHUB_WORKSPACE/$f" ] && cp "$GITHUB_WORKSPACE/$f" "$RUNNER_TEMP/result/"
+          done
+          true
+      - name: Upload result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: feedback-result
+          path: ${{ runner.temp }}/result/
+          include-hidden-files: true
+          if-no-files-found: ignore
+
+      # TEST: keep what the bot sent to the LLM.
+      - name: "TEST: upload LLM requests"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: llm-requests-fix
+          path: /tmp/llm-requests.jsonl
+
+  publish:
+    name: Publish feedback
+    needs: [start, fix]
+    if: always() && needs.start.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      TOOL_DIR: ${{ needs.fix.outputs.tool_dir }}
+      FIX_OUTCOME: ${{ needs.fix.outputs.outcome }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: refs/pull/${{ env.PR_NUMBER }}/head
+          fetch-depth: 0
+      # Everything in the artifact is model output: copy it as data, never run it.
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: feedback-result
+          path: ${{ runner.temp }}/result
+      - name: Check result
+        id: check
+        if: env.FIX_OUTCOME == 'success'
+        run: |
+          RESULT="$RUNNER_TEMP/result/tool"
+          if [[ ! "$TOOL_DIR" =~ ^[A-Za-z0-9_.-]+$ ]]; then
+            echo "::error::Refusing unsafe tool directory name: $TOOL_DIR"; exit 1
+          fi
+          if [ ! -d "$RESULT" ]; then
+            echo "::error::No tool files in the result"; exit 1
+          fi
+          # Only plain files and directories, and a sane size.
+          if [ -n "$(find "$RESULT" ! -type f ! -type d)" ]; then
+            echo "::error::Result contains symlinks or special files:"; find "$RESULT" ! -type f ! -type d; exit 1
+          fi
+          if [ "$(du -sb "$RESULT" | cut -f1)" -gt 104857600 ]; then
+            echo "::error::Result is larger than 100 MB"; exit 1
+          fi
+      - name: Commit and push changes
+        id: commit
+        if: steps.check.outcome == 'success'
+        run: |
+          # The model only ever edits tools/<dir>/: replace exactly that.
+          rm -rf "tools/$TOOL_DIR"
+          cp -a "$RUNNER_TEMP/result/tool" "tools/$TOOL_DIR"
+          # Checkout does not persist the token; git push gets it from GH_TOKEN via gh.
+          gh auth setup-git
+          git config user.name "gxy-tool-bot"
+          git config user.email "gxy-tool-bot@users.noreply.github.com"
+          # Detect files that are gitignored (e.g. .tar test data)
+          IGNORED_FILES=$(find "tools/$TOOL_DIR" -type f | git check-ignore --no-index --stdin 2>/dev/null || true)
+          # Add everything that isn't ignored
+          git add -A "tools/$TOOL_DIR/" || true
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            # LLM-generated commit message if there is one: drop control
+            # characters and cap its length. Otherwise the fallback.
+            MSG_FILE="$RUNNER_TEMP/result/commit-msg"
+            if [ -s "$MSG_FILE" ]; then
+              tr -d '\000-\010\013\014\016-\037\177' < "$MSG_FILE" | head -c 4000 > "$RUNNER_TEMP/commit-msg"
+            else
+              echo "Address feedback on PR #$PR_NUMBER" > "$RUNNER_TEMP/commit-msg"
+            fi
+            git commit -F "$RUNNER_TEMP/commit-msg"
+            # Checked out refs/pull/<N>/head (detached HEAD) — push must be
+            # explicit. The fork check in start guarantees the PR head branch
+            # lives in this repo, so this always targets the PR's own branch.
+            HEAD_BRANCH=$(gh pr view $PR_NUMBER --json headRefName --jq '.headRefName')
+            git push origin "HEAD:$HEAD_BRANCH"
+          fi
+          # If some files were gitignored, post a comment for human review
+          if [ -n "$IGNORED_FILES" ]; then
+            IGNORED_MSG="⚠️ The following files were generated but are excluded by .gitignore and were NOT committed:\n\n"
+            for f in $IGNORED_FILES; do
+              IGNORED_MSG+=" - \`$f\`\n"
+            done
+            IGNORED_MSG+="\nThese files are needed for the tool tests. To include them, a maintainer can run \`git add -f\` for each file, or download them from the [workflow artifacts](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})."
+            gh pr comment $PR_NUMBER --body "$(echo -e "$IGNORED_MSG")"
+          fi
+      - name: Upload gitignored files as artifacts
+        if: steps.commit.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: gitignored-test-data
+          path: |
+            ${{ github.workspace }}/tools/${{ env.TOOL_DIR }}/test-data/*.tar
+          if-no-files-found: ignore
+      - name: Post comments
+        if: always()
+        run: |
+          # The bot's own comments (summary, validation errors, give-up reason).
+          shopt -s nullglob
+          for f in "$RUNNER_TEMP"/result/comments/*.md; do
+            gh pr comment $PR_NUMBER --body-file "$f"
+          done
+          if [ "${{ steps.commit.outcome }}" = "success" ] && [ -f "$RUNNER_TEMP/result/.validation-failed" ]; then
+            gh pr comment $PR_NUMBER --body "⚠️ Validation issues were found after addressing feedback. Add the \`tool-bot:address-feedback\` (or \`address-feedback\`) label to have the bot attempt fixes again."
+          fi
+          if [ "${{ steps.commit.outcome }}" != "success" ] && [ ! -f "$RUNNER_TEMP/result/.gave-up" ]; then
+            # The CLI already posted the agent's give-up reason — don't post
+            # a second, contradictory comment.
+            gh pr comment $PR_NUMBER --body "⚠️ Failed to address feedback. Check the [workflow logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details."
+          fi
