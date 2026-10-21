@@ -6,4 +6,5 @@
     <outputs>
         <data name="output" format="txt"/>
     </outputs>
+    <help><![CDATA[Copies the input.]]></help>
 </tool>
