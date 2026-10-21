@@ -1,0 +1,9 @@
+<tool id="demo" name="Demo" version="0.1.0">
+    <command><![CDATA[cat '$input' > '$output']]></command>
+    <inputs>
+        <param name="input" type="data" format="txt" label="Input"/>
+    </inputs>
+    <outputs>
+        <data name="output" format="txt"/>
+    </outputs>
+</tool>
