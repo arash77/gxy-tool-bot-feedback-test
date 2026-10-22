@@ -7,4 +7,10 @@
         <data name="output" format="txt"/>
     </outputs>
     <help><![CDATA[Copies the input.]]></help>
+    <tests>
+        <test>
+            <param name="input" value="in.txt"/>
+            <output name="output" file="in.txt"/>
+        </test>
+    </tests>
 </tool>
