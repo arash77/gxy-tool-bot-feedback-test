@@ -24,7 +24,7 @@ jobs:
             cd "$1"
             set +e
             sudo -n -u gxyexec env -i "PATH=/tmp/bin:/usr/bin:/bin" "HOME=$H" "PWD=$1" "MAMBA_ROOT_PREFIX=$H/mamba" \
-              sh -c 'umask 000; mkdir -p "$HOME"; ls . >/dev/null 2>&1 || cd "$HOME"; exec "$@"' sh \
+              sh -c 'umask 000; mkdir -p "$HOME"; cd "$(pwd -P)" 2>/dev/null || cd "$HOME"; exec "$@"' sh \
               /tmp/bin/micromamba create -y -p "$2" -c conda-forge coreutils > /tmp/m.out 2> /tmp/m.err
             echo "DIAG from $1: exit $?"; set -e
             grep -vE "^(trace|debug) " /tmp/m.err | tail -12; tail -3 /tmp/m.out
