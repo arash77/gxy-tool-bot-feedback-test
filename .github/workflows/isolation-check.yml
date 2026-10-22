@@ -1,0 +1,37 @@
+# Checks two isolation options for the bot (d-callan/gxy-tool-bot#37):
+# A) a separate unprivileged user for commands, B) a key held in a service
+# container. Uses a dummy secret and prints only counts and exit codes.
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    services:
+      proxy:
+        image: nginx:1.27-alpine
+        env:
+          DUMMY_KEY: ${{ secrets.GXY_TOOL_BOT_API_KEY }}
+    steps:
+      - name: Who runs the job
+        run: |
+          echo "user: $(id -un), groups: $(id -Gn)"
+          sudo -n true && echo "passwordless sudo: yes" || echo "passwordless sudo: no"
+      - name: "B: can the job user read the service container's env?"
+        run: |
+          docker ps --format "running: {{.Image}}"
+          CID=$(docker ps -q --filter ancestor=nginx:1.27-alpine | head -1)
+          echo "docker usable without sudo: $(docker ps >/dev/null 2>&1 && echo yes || echo no)"
+          echo "DUMMY_KEY entries visible via docker inspect: $(docker inspect --format '{{json .Config.Env}}' "$CID" | grep -o 'DUMMY_KEY=' | wc -l)"
+      - name: "A: can a separate user read this step's env?"
+        env:
+          DUMMY_KEY: ${{ secrets.GXY_TOOL_BOT_API_KEY }}
+        run: |
+          sudo useradd -M -s /bin/bash botexec
+          echo "botexec in docker group: $(id -Gn botexec | grep -qw docker && echo yes || echo no)"
+          echo "botexec can sudo: $(sudo -u botexec sudo -n true 2>/dev/null && echo yes || echo no)"
+          echo "botexec can use docker: $(sudo -u botexec docker ps >/dev/null 2>&1 && echo yes || echo no)"
+          if sudo -n -u botexec cat /proc/$$/environ >/dev/null 2>&1; then echo "botexec reads this shell's env: YES"; else echo "botexec reads this shell's env: no (denied)"; fi
+          if cat /proc/$$/environ | tr '\0' '\n' | grep -q '^DUMMY_KEY='; then echo "same user reads it: yes"; fi
