@@ -13,4 +13,5 @@
             <output name="output" file="in.txt"/>
         </test>
     </tests>
+    <help><![CDATA[Copies the input.]]></help>
 </tool>
