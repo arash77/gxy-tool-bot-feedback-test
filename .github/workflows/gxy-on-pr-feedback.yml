@@ -95,11 +95,12 @@ jobs:
       - name: "TEST: start fake LLM"
         run: |
           git show FETCH_HEAD:.github/fake-llm/fake_llm.py > /tmp/fake_llm.py
-          nohup python3 /tmp/fake_llm.py 18765 /tmp/llm-requests.jsonl > /tmp/fake_llm.log 2>&1 &
+          MODE=$(git show FETCH_HEAD:.github/fake-llm/mode 2>/dev/null || echo normal)
+          nohup python3 /tmp/fake_llm.py 18765 /tmp/llm-requests.jsonl "$MODE" > /tmp/fake_llm.log 2>&1 &
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: pip install --no-cache-dir "git+https://github.com/arash77/gxy-tool-bot@18686ce68c650a11bbff3ad04531032a4f3351a7"
+      - run: pip install --no-cache-dir "git+https://github.com/arash77/gxy-tool-bot@b0a8945692193881b1053e8ddc0a095dfb8006e3"
       - run: pip install "planemo>=0.75.43"
       - name: Install micromamba
         run: |
@@ -139,21 +140,22 @@ jobs:
       # planemo_test / run_in_conda run model-chosen commands next to the LLM
       # key. The bot runs them as this unprivileged user
       # (GXY_TOOL_BOT_EXEC_USER), which can't read the bot process's
-      # environment; it may write the tool dir and its own temp dir only.
+      # environment. It works on a copy of the tool dir outside the runner's
+      # home, which stays closed to it.
       - name: Create the exec user
         env:
           TOOL_DIR: ${{ steps.find_tool_dir.outputs.tool_dir }}
         run: |
           sudo useradd -M -s /usr/sbin/nologin gxyexec
-          # It must reach the tool dir: traverse (not list) the runner-owned dirs above it.
-          d="$GITHUB_WORKSPACE/tools"
-          while [ "$d" != / ]; do chmod o+x "$d" 2>/dev/null || true; d=$(dirname "$d"); done
-          chmod -R a+rwX "tools/$TOOL_DIR"
           if sudo -u gxyexec sudo -n true 2>/dev/null || sudo -u gxyexec docker ps >/dev/null 2>&1; then
             echo "::error::gxyexec must have neither sudo nor docker"
             exit 1
           fi
+          WORK=$(mktemp -d /tmp/gxy-work.XXXXXX)
+          cp -a "tools/$TOOL_DIR" "$WORK/"
+          chmod -R a+rwX "$WORK"
           echo "GXY_TOOL_BOT_EXEC_USER=gxyexec" >> "$GITHUB_ENV"
+          echo "WORK_TOOL_DIR=$WORK/$TOOL_DIR" >> "$GITHUB_ENV"
       - name: Address feedback
         id: address
         # Failures are reported by the publish job.
@@ -175,23 +177,39 @@ jobs:
           gxy-tool-bot address-feedback \
             --pr $PR_NUMBER \
             --config .gxy-tool-bot.yml \
-            --tool-dir tools/${{ steps.find_tool_dir.outputs.tool_dir }} \
+            --tool-dir "$WORK_TOOL_DIR" \
             --actor ${{ github.event.sender.login || 'manual' }} \
             --commit-msg-path "$RUNNER_TEMP/result/commit-msg" \
             --comment-dir "$RUNNER_TEMP/result/comments" \
             "${OVERRIDE_ARGS[@]}"
-      - name: Format updated XML with planemo
-        if: steps.address.outcome == 'success'
+      # Before this job touches the files again: nothing of gxyexec's may keep
+      # running, and the tool dir may hold only plain files and dirs (a link
+      # would be followed by the steps below and by the upload).
+      - name: Stop the exec user and check the tool dir
+        id: isolation
+        if: always() && env.WORK_TOOL_DIR != ''
         run: |
-          planemo format --recursive tools/${{ steps.find_tool_dir.outputs.tool_dir }}/
+          sudo pkill -KILL -u gxyexec || true
+          sleep 1
+          if pgrep -u gxyexec >/dev/null; then
+            echo "::error::gxyexec still has processes running"
+            exit 1
+          fi
+          if [ -n "$(find "$WORK_TOOL_DIR" ! -type f ! -type d)" ]; then
+            echo "::error::The tool dir holds links or special files:"
+            find "$WORK_TOOL_DIR" ! -type f ! -type d
+            exit 1
+          fi
+      - name: Format updated XML with planemo
+        if: steps.address.outcome == 'success' && steps.isolation.outcome == 'success'
+        run: |
+          planemo format --recursive "$WORK_TOOL_DIR/"
       - name: Collect result
         if: always()
-        env:
-          TOOL_DIR: ${{ steps.find_tool_dir.outputs.tool_dir }}
         run: |
           mkdir -p "$RUNNER_TEMP/result"
-          if [ "${{ steps.address.outcome }}" = "success" ]; then
-            cp -a "tools/$TOOL_DIR" "$RUNNER_TEMP/result/tool"
+          if [ "${{ steps.address.outcome }}" = "success" ] && [ "${{ steps.isolation.outcome }}" = "success" ]; then
+            cp -a "$WORK_TOOL_DIR" "$RUNNER_TEMP/result/tool"
             rm -f "$RUNNER_TEMP/result/tool/.tool-name"
           fi
           # Flag files the CLI writes for the publish job.

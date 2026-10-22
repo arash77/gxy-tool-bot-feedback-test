@@ -11,6 +11,8 @@ import sys
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 LOG = sys.argv[2]
+# guard: first leave a background process and an in-dir link, to test the job's check.
+MODE = sys.argv[3] if len(sys.argv) > 3 else "normal"
 
 CHECK = r"""
 echo "CHECK user: $(id -un)"
@@ -24,7 +26,7 @@ if touch ../outside.txt 2>/dev/null; then echo "CHECK can write tools/: YES"; rm
 if touch "$GITHUB_WORKSPACE/README.md" 2>/dev/null; then echo "CHECK can write repo files: YES"; else echo "CHECK can write repo files: no"; fi
 """
 
-STEPS = [
+STEPS = ([("run_in_conda", {"packages": ["coreutils"], "command": "ln -s demo.xml link.xml; (sleep 600 >/dev/null 2>&1 &); echo planted"})] if MODE == "guard" else []) + [
     ("run_in_conda", {"packages": ["coreutils"], "command": CHECK}),
     ("run_in_conda", {"packages": ["samtools"], "command": "samtools --version | head -1"}),
     ("planemo_lint", {"path": "demo.xml"}),
