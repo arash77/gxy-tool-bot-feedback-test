@@ -1,5 +1,5 @@
-# Diagnostic for gxy-tool-bot#37: micromamba create as an unprivileged user,
-# started from the checkout (inside the closed runner home) and from /tmp.
+# Diagnostic for gxy-tool-bot#37: micromamba create through the bot's own
+# exec-user wrapper and environment.
 on:
   workflow_dispatch:
 
@@ -13,21 +13,27 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install --no-cache-dir "git+https://github.com/arash77/gxy-tool-bot@ef264068fbe39120d80cef2dd1d9f2d5405424c3"
       - name: Install micromamba
         run: |
           curl -Ls "https://micro.mamba.pm/api/micromamba/linux-64/latest" | tar -xvj -C /tmp
-      - name: Create as gxyexec
+          echo "/tmp/bin" >> $GITHUB_PATH
+      - name: Create through the bot's wrapper
         run: |
           sudo useradd -M -s /usr/sbin/nologin gxyexec
-          H=/tmp/gxy-exec-home
-          run() {  # $1: where to start, $2: env prefix
-            cd "$1"
-            set +e
-            sudo -n -u gxyexec env -i "PATH=/tmp/bin:/usr/bin:/bin" "HOME=$H" "PWD=$1" "MAMBA_ROOT_PREFIX=$H/mamba" \
-              sh -c 'umask 000; mkdir -p "$HOME"; cd "$(pwd -P)" 2>/dev/null || cd "$HOME"; exec "$@"' sh \
-              /tmp/bin/micromamba create -y -p "$2" -c conda-forge coreutils > /tmp/m.out 2> /tmp/m.err
-            echo "DIAG from $1: exit $?"; set -e
-            grep -vE "^(trace|debug) " /tmp/m.err | tail -12; tail -3 /tmp/m.out
-          }
-          run "$GITHUB_WORKSPACE" /tmp/env-a
-          run /tmp /tmp/env-b
+          GXY_TOOL_BOT_EXEC_USER=gxyexec python - <<'PY'
+          import shutil, subprocess
+          from gxy_tool_bot.generator import _as_exec_user
+          from gxy_tool_bot.utils import sanitized_env
+          env = sanitized_env(set())
+          print("env vars passed:", sorted(k for k in env if "CONDA" in k or "MAMBA" in k or k in ("PWD", "TMPDIR", "XDG_CACHE_HOME")))
+          cmd = [shutil.which("micromamba"), "create", "-y", "-p", "/tmp/gxy_conda_diag", "-c", "bioconda", "-c", "conda-forge", "coreutils"]
+          r = subprocess.run(_as_exec_user(cmd, env), capture_output=True, text=True, env=env)
+          print("DIAG exit", r.returncode)
+          for line in (r.stderr + r.stdout).splitlines():
+              if line.startswith(("critical", "error", "warning")) or "denied" in line.lower():
+                  print("  ", line[:220])
+          PY
