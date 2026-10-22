@@ -6,6 +6,7 @@ The CHECK command reports what a model-chosen command can do, as yes/no and
 counts only.
 """
 import json
+import re
 import sys
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
@@ -51,8 +52,10 @@ class Handler(BaseHTTPRequestHandler):
                 continue
             done.add(i)
             if name == "write_file":
-                xml = open("tools/demo/demo.xml").read().replace(
-                    "</tool>", "    <help><![CDATA[Copies the input.]]></help>\n</tool>")
+                # Rewrite the help text: an edit that keeps the tool valid every run.
+                xml = re.sub(r"<help><!\[CDATA\[.*?\]\]></help>",
+                             f"<help><![CDATA[Copies the input. Edited {len(done)}.]]></help>",
+                             open("tools/demo/demo.xml").read(), flags=re.S)
                 args = {"path": "demo.xml", "content": xml}
             msg, finish = tool_call(i, name, args), "tool_calls"
             break
