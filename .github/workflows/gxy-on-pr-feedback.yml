@@ -99,7 +99,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: pip install --no-cache-dir "git+https://github.com/arash77/gxy-tool-bot@2bce65e8899dce9e80483cc07623dd477b2c78d4"
+      - run: pip install --no-cache-dir "git+https://github.com/arash77/gxy-tool-bot@18686ce68c650a11bbff3ad04531032a4f3351a7"
       - run: pip install "planemo>=0.75.43"
       - name: Install micromamba
         run: |
