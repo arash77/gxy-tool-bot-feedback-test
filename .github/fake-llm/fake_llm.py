@@ -13,6 +13,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 
 LOG = sys.argv[2]
 # guard: first leave a background process and an in-dir link, to test the job's check.
+# cron: first try to install a crontab.
 MODE = sys.argv[3] if len(sys.argv) > 3 else "normal"
 
 CHECK = r"""
@@ -27,7 +28,12 @@ if touch ../outside.txt 2>/dev/null; then echo "CHECK can write tools/: YES"; rm
 if touch "$GITHUB_WORKSPACE/README.md" 2>/dev/null; then echo "CHECK can write repo files: YES"; else echo "CHECK can write repo files: no"; fi
 """
 
-STEPS = ([("run_in_conda", {"packages": ["coreutils"], "command": "ln -s demo.xml link.xml; (sleep 600 >/dev/null 2>&1 &); echo planted"})] if MODE == "guard" else []) + [
+PREFIX = {
+    "guard": [("run_in_conda", {"packages": ["coreutils"], "command": "ln -s demo.xml link.xml; (sleep 600 >/dev/null 2>&1 &); echo planted"})],
+    # cron: try to leave a crontab that plants a link after the job's check.
+    "cron": [("run_in_conda", {"packages": ["coreutils"], "command": 'echo "* * * * * ln -sf demo.xml $(pwd -P)/late.xml" | crontab - 2>&1; echo "CHECK crontab -l: $(crontab -l 2>&1)"'})],
+}
+STEPS = PREFIX.get(MODE, []) + [
     ("run_in_conda", {"packages": ["coreutils"], "command": CHECK}),
     ("run_in_conda", {"packages": ["samtools"], "command": "samtools --version | head -1"}),
     ("planemo_lint", {"path": "demo.xml"}),
