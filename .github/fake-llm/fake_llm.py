@@ -7,6 +7,7 @@ counts only.
 """
 import json
 import re
+import time
 import sys
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
@@ -56,7 +57,7 @@ class Handler(BaseHTTPRequestHandler):
             if name == "write_file":
                 # Rewrite the help text: an edit that keeps the tool valid every run.
                 xml = re.sub(r"<help><!\[CDATA\[.*?\]\]></help>",
-                             f"<help><![CDATA[Copies the input. Edited {len(done)}.]]></help>",
+                             f"<help><![CDATA[Copies the input. Edited {int(time.time())}.]]></help>",
                              open("tools/demo/demo.xml").read(), flags=re.S)
                 args = {"path": "demo.xml", "content": xml}
             msg, finish = tool_call(i, name, args), "tool_calls"
