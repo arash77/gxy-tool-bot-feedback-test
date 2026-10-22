@@ -1,5 +1,8 @@
 <tool id="demo" name="Demo" version="0.1.0">
-    <command><![CDATA[cat '$input' > '$output']]></command>
+    <requirements>
+        <requirement type="package" version="9.5">coreutils</requirement>
+    </requirements>
+    <command detect_errors="aggressive"><![CDATA[cat '$input' > '$output']]></command>
     <inputs>
         <param name="input" type="data" format="txt" label="Input"/>
     </inputs>
@@ -7,10 +10,28 @@
         <data name="output" format="txt"/>
     </outputs>
     <tests>
-        <test>
+        <test expect_num_outputs="1">
             <param name="input" value="in.txt"/>
-            <output name="output" file="in.txt"/>
+            <output name="output" file="in.txt">
+                <assert_contents>
+                    <has_text text="hello"/>
+                </assert_contents>
+            </output>
         </test>
     </tests>
-    <help><![CDATA[Copies the input. Edited 1792668010.]]></help>
+    <help format="markdown"><![CDATA[
+**Demo** copies its input file to the output, byte for byte.
+
+**Input**
+
+- A plain text file.
+
+**Output**
+
+- An exact copy of the input file.
+    ]]></help>
+    <citations>
+        <!-- No publication exists for this demo tool; cite the Galaxy framework itself to satisfy lint. -->
+        <citation type="doi">10.1093/nar/gkw343</citation>
+    </citations>
 </tool>
