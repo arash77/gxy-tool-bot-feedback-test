@@ -91,12 +91,6 @@ jobs:
         run: |
           git fetch origin ${{ github.event.repository.default_branch }}
           git checkout FETCH_HEAD -- .gxy-tool-bot.yml
-      # TEST: fake LLM inside the job, recording what the bot sends.
-      - name: "TEST: start fake LLM"
-        run: |
-          git show FETCH_HEAD:.github/fake-llm/fake_llm.py > /tmp/fake_llm.py
-          MODE=$(git show FETCH_HEAD:.github/fake-llm/mode 2>/dev/null || echo normal)
-          nohup python3 /tmp/fake_llm.py 18765 /tmp/llm-requests.jsonl "$MODE" > /tmp/fake_llm.log 2>&1 &
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -230,14 +224,6 @@ jobs:
           path: ${{ runner.temp }}/result/
           include-hidden-files: true
           if-no-files-found: ignore
-
-      # TEST: keep what the bot sent to the LLM.
-      - name: "TEST: upload LLM requests"
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: llm-requests-fix
-          path: /tmp/llm-requests.jsonl
 
   publish:
     name: Publish feedback
