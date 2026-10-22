@@ -1,0 +1,28 @@
+# Diagnostic for gxy-tool-bot#37: what an unprivileged user can reach under
+# the runner's home before and after opening traversal to the workspace.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Check
+        run: |
+          sudo useradd -M -s /usr/sbin/nologin gxyexec
+          stat -c 'before: %A %U %n' /home/runner /home/runner/work "$(dirname "$GITHUB_WORKSPACE")" "$GITHUB_WORKSPACE"
+          echo "gxyexec can list /home/runner before: $(sudo -u gxyexec ls /home/runner >/dev/null 2>&1 && echo yes || echo no)"
+          d="$GITHUB_WORKSPACE/tools"; mkdir -p "$d"
+          while [ "$d" != / ]; do chmod o+x "$d" 2>/dev/null || true; d=$(dirname "$d"); done
+          stat -c 'after: %A %U %n' /home/runner /home/runner/work
+          echo "--- top-level entries of /home/runner (as root)"; sudo ls -la /home/runner | awk '{print $1, $3, $NF}'
+          echo "--- files gxyexec can read under /home/runner, outside work/ (depth 4)"
+          sudo -u gxyexec find /home/runner -maxdepth 4 -path /home/runner/work -prune -o -type f -readable -print 2>/dev/null | head -40
+          echo "--- of those, names that look like credentials"
+          sudo -u gxyexec find /home/runner -maxdepth 6 -path /home/runner/work -prune -o -type f -readable \( -iname '*cred*' -o -iname '.runner' -o -iname '*token*' -o -iname '*.key' -o -iname 'hosts.yml' \) -print 2>/dev/null | head
