@@ -1,0 +1,32 @@
+# Diagnostic: can the exec user schedule work that outlives `pkill -u`?
+# No secrets; the only scheduled payload touches a marker file.
+name: persist-diag
+on: workflow_dispatch
+permissions: {}
+jobs:
+  diag:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Services
+        run: |
+          for s in cron atd systemd-logind; do echo "$s: $(systemctl is-active $s 2>&1)"; done
+          command -v at crontab systemd-run loginctl || true
+      - name: Create the exec user (as on-pr-feedback.yml)
+        run: sudo useradd -M -s /usr/sbin/nologin gxyexec
+      - name: Try to schedule work as gxyexec
+        run: |
+          M=/tmp/gxy-persist; sudo install -d -m 777 $M
+          as() { sudo -n -u gxyexec env -i HOME=/tmp/gxy-exec-home PATH=/usr/bin:/bin sh -c "mkdir -p \$HOME; cd \$HOME; $1"; }
+          echo "crontab: $(as "echo '* * * * * touch $M/cron' | crontab - 2>&1 && echo accepted")"
+          echo "at: $(as "echo 'touch $M/at' | at now + 1 minute 2>&1 | tail -1")"
+          echo "systemd-run --user: $(as "systemd-run --user --on-active=60 touch $M/systemd 2>&1 | tail -1")"
+          echo "linger: $(as "loginctl enable-linger 2>&1 | tail -1")"
+      - name: Kill as the workflow does, then wait for timers
+        run: |
+          sudo pkill -KILL -u gxyexec || true; sleep 1
+          echo "procs left: $(pgrep -u gxyexec | wc -l)"
+          echo "crontab left: $(sudo crontab -u gxyexec -l 2>&1)"
+          echo "atq: $(sudo atq 2>&1)"
+          sleep 130
+          echo "markers: $(ls /tmp/gxy-persist)"
+          ls -l /tmp/gxy-persist
