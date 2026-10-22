@@ -100,7 +100,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: pip install --no-cache-dir "git+https://github.com/arash77/gxy-tool-bot@8be6dd1e64a5ec084c02225c85c4534e0cc4c9dd"
+      - run: pip install --no-cache-dir "git+https://github.com/arash77/gxy-tool-bot@2e5ec24327a2a3dd72afc7ec698c7a39b44d7a7f"
       - run: pip install "planemo>=0.75.43"
       - name: Install micromamba
         run: |
@@ -147,6 +147,8 @@ jobs:
           TOOL_DIR: ${{ steps.find_tool_dir.outputs.tool_dir }}
         run: |
           sudo useradd -M -s /usr/sbin/nologin gxyexec
+          # The runner runs cron: without this, a crontab outlives the pkill below.
+          echo gxyexec | sudo tee -a /etc/cron.deny >/dev/null
           if sudo -u gxyexec sudo -n true 2>/dev/null || sudo -u gxyexec docker ps >/dev/null 2>&1; then
             echo "::error::gxyexec must have neither sudo nor docker"
             exit 1
@@ -184,32 +186,35 @@ jobs:
             "${OVERRIDE_ARGS[@]}"
       # Before this job touches the files again: nothing of gxyexec's may keep
       # running, and the tool dir may hold only plain files and dirs (a link
-      # would be followed by the steps below and by the upload).
+      # would be followed by the steps below and by the upload). The steps
+      # below use a snapshot in RUNNER_TEMP, which gxyexec can't reach.
       - name: Stop the exec user and check the tool dir
         id: isolation
         if: always() && env.WORK_TOOL_DIR != ''
         run: |
           sudo pkill -KILL -u gxyexec || true
+          sudo crontab -r -u gxyexec 2>/dev/null || true
           sleep 1
           if pgrep -u gxyexec >/dev/null; then
             echo "::error::gxyexec still has processes running"
             exit 1
           fi
-          if [ -n "$(find "$WORK_TOOL_DIR" ! -type f ! -type d)" ]; then
+          cp -a "$WORK_TOOL_DIR" "$RUNNER_TEMP/tool"
+          if [ -n "$(find "$RUNNER_TEMP/tool" ! -type f ! -type d)" ]; then
             echo "::error::The tool dir holds links or special files:"
-            find "$WORK_TOOL_DIR" ! -type f ! -type d
+            find "$RUNNER_TEMP/tool" ! -type f ! -type d
             exit 1
           fi
       - name: Format updated XML with planemo
         if: steps.address.outcome == 'success' && steps.isolation.outcome == 'success'
         run: |
-          planemo format --recursive "$WORK_TOOL_DIR/"
+          planemo format --recursive "$RUNNER_TEMP/tool/"
       - name: Collect result
         if: always()
         run: |
           mkdir -p "$RUNNER_TEMP/result"
           if [ "${{ steps.address.outcome }}" = "success" ] && [ "${{ steps.isolation.outcome }}" = "success" ]; then
-            cp -a "$WORK_TOOL_DIR" "$RUNNER_TEMP/result/tool"
+            cp -a "$RUNNER_TEMP/tool" "$RUNNER_TEMP/result/tool"
             rm -f "$RUNNER_TEMP/result/tool/.tool-name"
           fi
           # Flag files the CLI writes for the publish job.
