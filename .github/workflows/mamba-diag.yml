@@ -1,0 +1,33 @@
+# Diagnostic for gxy-tool-bot#37: micromamba create as an unprivileged user,
+# started from the checkout (inside the closed runner home) and from /tmp.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install micromamba
+        run: |
+          curl -Ls "https://micro.mamba.pm/api/micromamba/linux-64/latest" | tar -xvj -C /tmp
+      - name: Create as gxyexec
+        run: |
+          sudo useradd -M -s /usr/sbin/nologin gxyexec
+          H=/tmp/gxy-exec-home
+          run() {  # $1: where to start, $2: env prefix
+            cd "$1"
+            set +e
+            sudo -n -u gxyexec env -i "PATH=/tmp/bin:/usr/bin:/bin" "HOME=$H" "PWD=$1" "MAMBA_ROOT_PREFIX=$H/mamba" \
+              sh -c 'umask 000; mkdir -p "$HOME"; ls . >/dev/null 2>&1 || cd "$HOME"; exec "$@"' sh \
+              /tmp/bin/micromamba create -y -p "$2" -c conda-forge coreutils > /tmp/m.out 2> /tmp/m.err
+            echo "DIAG from $1: exit $?"; set -e
+            grep -vE "^(trace|debug) " /tmp/m.err | tail -12; tail -3 /tmp/m.out
+          }
+          run "$GITHUB_WORKSPACE" /tmp/env-a
+          run /tmp /tmp/env-b
