@@ -6,6 +6,10 @@ on:
       as:
         type: choice
         options: [runner, gxyexec]
+      report:
+        description: "tmpfile: a pre-created file in /tmp; dir: a path in a fresh writable dir"
+        type: choice
+        options: [tmpfile, dir]
 
 permissions:
   contents: read
@@ -36,8 +40,10 @@ jobs:
       - name: planemo test
         env:
           AS: ${{ inputs.as }}
+          REPORT_MODE: ${{ inputs.report }}
         run: |
-          REPORT=$(mktemp --suffix .json); chmod 666 "$REPORT"
+          if [ "$REPORT_MODE" = dir ]; then D=$(mktemp -d); chmod 777 "$D"; REPORT="$D/report.json"
+          else REPORT=$(mktemp --suffix .json); chmod 666 "$REPORT"; fi
           CMD=(planemo test --test_output_json "$REPORT" "$GITHUB_WORKSPACE/tools/demo/demo.xml")
           if [ "$AS" = gxyexec ]; then
             H=/tmp/gxy-exec-home
@@ -45,6 +51,6 @@ jobs:
           fi
           cd tools/demo
           set +e; timeout 900 "${CMD[@]}" > /tmp/out.txt 2> /tmp/err.txt; rc=$?; set -e
-          echo "DIAG exit code: $rc"; echo "DIAG report bytes: $(wc -c < "$REPORT")"
+          echo "DIAG exit code: $rc"; echo "DIAG report bytes: $(wc -c < "$REPORT" 2>/dev/null || echo missing)"
           echo "----- stdout (last 40)"; tail -40 /tmp/out.txt
-          echo "----- stderr lines mentioning error/fail/exception (last 40)"; grep -iE "error|fail|exception|traceback|denied" /tmp/err.txt | tail -40
+          echo "----- stderr, not Galaxy's request log (last 30)"; grep -vE "uvicorn.access|GET /api|celery|Task galaxy|TaskPool" /tmp/err.txt | tail -30
