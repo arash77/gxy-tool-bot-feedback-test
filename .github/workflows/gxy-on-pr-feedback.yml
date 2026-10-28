@@ -1,4 +1,4 @@
-# TEST copy of gxy-tool-bot workflows/on-pr-feedback.yml (branch exec-user); only TEST: steps and the bot install differ.
+# TEST copy of gxy-tool-bot on-pr-feedback.yml (branch exec-user).
 on:
   pull_request:
     types: [labeled]
@@ -91,16 +91,19 @@ jobs:
         run: |
           git fetch origin ${{ github.event.repository.default_branch }}
           git checkout FETCH_HEAD -- .gxy-tool-bot.yml
-      # TEST: fake LLM inside the job, recording what the bot sends.
-      - name: "TEST: start fake LLM"
-        run: |
-          git show FETCH_HEAD:.github/fake-llm/fake_llm.py > /tmp/fake_llm.py
-          MODE=$(git show FETCH_HEAD:.github/fake-llm/mode 2>/dev/null || echo normal)
-          nohup python3 /tmp/fake_llm.py 18765 /tmp/llm-requests.jsonl "$MODE" > /tmp/fake_llm.log 2>&1 &
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: pip install --no-cache-dir "git+https://github.com/arash77/gxy-tool-bot@cf9d45ef1df5b530d40a088d0e3208716b4abb3a"
+      # TEST: fake LLM inside the job, recording what the bot sends.
+      - name: "TEST: start fake LLM"
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          f() { gh api "repos/$GITHUB_REPOSITORY/contents/.github/fake-llm/$1" --jq .content | base64 -d; }
+          f fake_llm.py > /tmp/fake_llm.py
+          MODE=$(f mode 2>/dev/null || echo normal)
+          nohup python3 /tmp/fake_llm.py 18765 /tmp/llm-requests.jsonl "$MODE" > /tmp/fake_llm.log 2>&1 &
+      - run: pip install --no-cache-dir "git+https://github.com/arash77/gxy-tool-bot@01f64f0a453364aa3450c16bfebd68b14d8f9df9"
       - run: pip install "planemo>=0.75.43"
       - name: Install micromamba
         run: |
@@ -205,6 +208,13 @@ jobs:
             find "$RUNNER_TEMP/tool" ! -type f ! -type d
             exit 1
           fi
+      # TEST: keep what the bot sent to the LLM.
+      - name: "TEST: upload LLM requests"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: llm-requests
+          path: /tmp/llm-requests.jsonl
       - name: Format updated XML with planemo
         if: steps.address.outcome == 'success' && steps.isolation.outcome == 'success'
         run: |
@@ -230,14 +240,6 @@ jobs:
           path: ${{ runner.temp }}/result/
           include-hidden-files: true
           if-no-files-found: ignore
-
-      # TEST: keep what the bot sent to the LLM.
-      - name: "TEST: upload LLM requests"
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: llm-requests-fix
-          path: /tmp/llm-requests.jsonl
 
   publish:
     name: Publish feedback
