@@ -1,0 +1,18 @@
+# TEST: the exec-user step must refuse a gxy-tool-bot without exec-user support.
+name: "TEST: old bot refused"
+on: workflow_dispatch
+permissions: {}
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install --no-cache-dir gxy-tool-bot==0.2.1
+      - name: Guard line from the templates
+        run: |
+          if python -c "from gxy_tool_bot.generator import _run_model_command"; then
+            echo "::error::0.2.1 was accepted"; exit 1
+          fi
+          echo "0.2.1 refused, as expected"
