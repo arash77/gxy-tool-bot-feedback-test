@@ -1,9 +1,16 @@
-<tool id="seqtk_seq_rc" name="seqtk seq -r" version="1.3+galaxy0" profile="23.0">
+<tool id="seqtk_seq_rc" name="seqtk seq -r" version="@TOOL_VERSION@+galaxy@VERSION_SUFFIX@" profile="23.0">
     <description>reverse-complement sequences</description>
+    <macros>
+        <token name="@TOOL_VERSION@">1.5</token>
+        <token name="@VERSION_SUFFIX@">0</token>
+    </macros>
+    <xrefs>
+        <xref type="bio.tools">seqtk</xref>
+    </xrefs>
     <requirements>
-        <requirement type="package" version="1.3">seqtk</requirement>
+        <requirement type="package" version="1.5">seqtk</requirement>
     </requirements>
-    <command detect_errors="exit_code"><![CDATA[seqtk seq -r '$input' > '$output']]></command>
+    <command detect_errors="aggressive"><![CDATA[seqtk seq -r '$input' > '$output']]></command>
     <inputs>
         <param name="input" type="data" format="fasta" label="Sequences"/>
     </inputs>
@@ -11,12 +18,18 @@
         <data name="output" format="fasta"/>
     </outputs>
     <tests>
-        <test>
+        <test expect_num_outputs="1">
             <param name="input" value="in.fa"/>
             <output name="output" file="out.fa"/>
         </test>
     </tests>
-    <help><![CDATA[Reverse-complements each sequence with ``seqtk seq -r``.]]></help>
+    <help format="markdown"><![CDATA[
+Reverse-complements each sequence in a FASTA file with ``seqtk seq -r``.
+
+**Input**: a FASTA file of sequences.
+
+**Output**: a FASTA file where every sequence has been reverse-complemented (sequence names are preserved).
+    ]]></help>
     <citations>
         <citation type="bibtex">@misc{seqtk, title={seqtk}, url={https://github.com/lh3/seqtk}}</citation>
     </citations>
