@@ -1,0 +1,9 @@
+name: democat
+owner: arash77
+description: Copy a text file (test tool)
+long_description: Copy a text file (test tool).
+categories:
+  - Text Manipulation
+homepage_url: https://www.gnu.org/software/coreutils/
+remote_repository_url: https://github.com/arash77/gxy-tool-bot-feedback-test/tree/main/tools/democat
+type: unrestricted
