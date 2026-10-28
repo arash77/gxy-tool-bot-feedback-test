@@ -1,6 +1,6 @@
 api:
-  base_url: https://entering-spend-else-weblog.trycloudflare.com
-  model: ufr/coding-complex
+  base_url: http://127.0.0.1:18765/v1
+  model: stub
   max_tool_iterations: 30
   max_validation_retries: 0
   temperature_plan: 0.4
