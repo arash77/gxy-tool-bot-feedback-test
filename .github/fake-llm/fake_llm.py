@@ -40,6 +40,52 @@ STEPS = PREFIX.get(MODE, []) + [
     ("planemo_test", {"path": "demo.xml"}),
     ("write_file", None),
 ]
+
+# generate (the bot offers set_tool_dir): write a small tool, then the same checks.
+TOOL = """<tool id="democat" name="Demo cat" version="0.1.0" profile="23.0">
+    <requirements>
+        <requirement type="package" version="9.5">coreutils</requirement>
+    </requirements>
+    <command detect_errors="exit_code"><![CDATA[cat '$input' > '$output']]></command>
+    <inputs>
+        <param name="input" type="data" format="txt" label="Input"/>
+    </inputs>
+    <outputs>
+        <data name="output" format="txt"/>
+    </outputs>
+    <tests>
+        <test>
+            <param name="input" value="in.txt"/>
+            <output name="output" file="in.txt"/>
+        </test>
+    </tests>
+    <help><![CDATA[Copies the input.]]></help>
+    <citations>
+        <citation type="bibtex">@misc{coreutils, title={GNU coreutils}, url={https://www.gnu.org/software/coreutils/}}</citation>
+    </citations>
+</tool>
+"""
+SHED = """name: democat
+owner: arash77
+description: Copy a text file (test tool)
+long_description: Copy a text file (test tool).
+categories:
+  - Text Manipulation
+homepage_url: https://www.gnu.org/software/coreutils/
+remote_repository_url: https://github.com/arash77/gxy-tool-bot-feedback-test/tree/main/tools/democat
+type: unrestricted
+"""
+GEN_PREFIX = {"guard": [("run_in_conda", {"packages": ["coreutils"], "command": "ln -s democat.xml link.xml; (sleep 600 >/dev/null 2>&1 &); echo planted"})]}
+GEN_STEPS = [
+    ("set_tool_dir", {"name": "democat"}),
+    ("write_file", {"path": "test-data/in.txt", "content": "hello\n"}),
+    ("write_file", {"path": "democat.xml", "content": TOOL}),
+    ("write_file", {"path": ".shed.yml", "content": SHED}),
+] + GEN_PREFIX.get(MODE, []) + [
+    ("run_in_conda", {"packages": ["coreutils"], "command": CHECK}),
+    ("planemo_lint", {"path": "democat.xml"}),
+    ("planemo_test", {"path": "democat.xml"}),
+]
 done = set()
 
 
@@ -56,17 +102,19 @@ class Handler(BaseHTTPRequestHandler):
             f.write(body.decode() + "\n")
         tools = {t["function"]["name"] for t in json.loads(body).get("tools", [])}
         msg, finish = {"role": "assistant", "content": "Done."}, "stop"
-        for i, (name, args) in enumerate(STEPS):
-            if i in done or name not in tools:
+        gen = "set_tool_dir" in tools
+        for i, (name, args) in enumerate(GEN_STEPS if gen else STEPS):
+            key = ("gen" if gen else "fb", i)
+            if key in done or name not in tools:
                 continue
-            done.add(i)
-            if name == "write_file":
+            done.add(key)
+            if name == "write_file" and args is None:
                 # Rewrite the help text: an edit that keeps the tool valid every run.
                 xml = re.sub(r"<help><!\[CDATA\[.*?\]\]></help>",
                              f"<help><![CDATA[Copies the input. Edited {int(time.time())}.]]></help>",
                              open("tools/demo/demo.xml").read(), flags=re.S)
                 args = {"path": "demo.xml", "content": xml}
-            msg, finish = tool_call(i, name, args), "tool_calls"
+            msg, finish = tool_call(f"{key[0]}{i}", name, args), "tool_calls"
             break
         data = json.dumps({"id": "fake", "object": "chat.completion", "model": "stub",
                            "choices": [{"index": 0, "finish_reason": finish, "message": msg}],

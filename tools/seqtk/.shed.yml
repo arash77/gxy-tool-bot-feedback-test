@@ -1,0 +1,9 @@
+name: seqtk_seq_rc
+owner: arash77
+description: Reverse-complement sequences with seqtk (test tool)
+long_description: Reverse-complement sequences with seqtk (test tool for gxy-tool-bot autoupdate).
+categories:
+  - Sequence Analysis
+homepage_url: https://github.com/lh3/seqtk
+remote_repository_url: https://github.com/arash77/gxy-tool-bot-feedback-test/tree/main/tools/seqtk
+type: unrestricted
