@@ -1,0 +1,16 @@
+# TEST: does the bot's stop call end a background process of the exec user?
+name: "TEST: kill diag"
+on: workflow_dispatch
+permissions: {}
+jobs:
+  diag:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          set +e
+          sudo useradd -M -s /usr/sbin/nologin gxyexec
+          sudo -n -u gxyexec sh -c '(sleep 600 >/dev/null 2>&1 &)'
+          echo "before: $(pgrep -u gxyexec -x sleep | wc -l)"
+          sudo -n -u gxyexec pkill -KILL -u gxyexec; echo "pkill exit: $?"
+          sleep 1; echo "after: $(pgrep -u gxyexec -x sleep | wc -l)"
+          sudo -n -u gxyexec pkill -KILL -u gxyexec; echo "pkill exit with nothing left: $?"
