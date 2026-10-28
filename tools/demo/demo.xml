@@ -1,4 +1,8 @@
 <tool id="demo" name="Demo" version="0.1.0">
+    <description>copy a text file</description>
+    <creator>
+        <organization url="https://galaxyproject.org" name="Galaxy Community"/>
+    </creator>
     <requirements>
         <requirement type="package" version="9.5">coreutils</requirement>
     </requirements>
