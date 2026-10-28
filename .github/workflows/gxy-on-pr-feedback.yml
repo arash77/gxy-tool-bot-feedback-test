@@ -1,4 +1,4 @@
-# TEST copy of gxy-tool-bot on-pr-feedback.yml (branch exec-user).
+# TEST copy of gxy-tool-bot on-pr-feedback.yml (branch exec-user) with a real model.
 on:
   pull_request:
     types: [labeled]
@@ -95,15 +95,6 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      # TEST: fake LLM inside the job, recording what the bot sends.
-      - name: "TEST: start fake LLM"
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          f() { gh api "repos/$GITHUB_REPOSITORY/contents/.github/fake-llm/$1" --jq .content | base64 -d; }
-          f fake_llm.py > /tmp/fake_llm.py
-          MODE=$(f mode 2>/dev/null || echo normal)
-          nohup python3 /tmp/fake_llm.py 18765 /tmp/llm-requests.jsonl "$MODE" > /tmp/fake_llm.log 2>&1 &
       - run: pip install --no-cache-dir "git+https://github.com/arash77/gxy-tool-bot@62d636c5bb2517dee53269acfaf76723cf1b6165"
       - run: pip install "planemo>=0.75.43"
       - name: Install micromamba
@@ -215,13 +206,6 @@ jobs:
             find "$RUNNER_TEMP/tool" ! -type f ! -type d
             exit 1
           fi
-      # TEST: keep what the bot sent to the LLM.
-      - name: "TEST: upload LLM requests"
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: llm-requests
-          path: /tmp/llm-requests.jsonl
       - name: Format updated XML with planemo
         if: steps.address.outcome == 'success' && steps.isolation.outcome == 'success'
         run: |
