@@ -64,7 +64,7 @@ jobs:
           f fake_llm.py > /tmp/fake_llm.py
           MODE=$(f mode 2>/dev/null || echo normal)
           nohup python3 /tmp/fake_llm.py 18765 /tmp/llm-requests.jsonl "$MODE" > /tmp/fake_llm.log 2>&1 &
-      - run: pip install --no-cache-dir "git+https://github.com/arash77/gxy-tool-bot@01f64f0a453364aa3450c16bfebd68b14d8f9df9"
+      - run: pip install --no-cache-dir "git+https://github.com/arash77/gxy-tool-bot@642ee46226edc43c8a9fe730e749238c7c199f55"
       - run: pip install "planemo>=0.75.43"
       - name: Install micromamba
         run: |
@@ -90,7 +90,12 @@ jobs:
       # environment. The bot writes its output outside the runner's home,
       # which stays closed to that user.
       - name: Create the exec user
+        id: exec_user
         run: |
+          # An older gxy-tool-bot ignores GXY_TOOL_BOT_EXEC_USER and would run the
+          # model's commands as this user, next to the key: refuse it.
+          python -c "from gxy_tool_bot.generator import _run_model_command" || {
+            echo "::error::This gxy-tool-bot can't run commands as another user; update it"; exit 1; }
           sudo useradd -M -s /usr/sbin/nologin gxyexec
           # The runner runs cron: without this, a crontab outlives the pkill below.
           echo gxyexec | sudo tee -a /etc/cron.deny >/dev/null
@@ -131,6 +136,7 @@ jobs:
       # would be followed by the steps below). The steps below use a snapshot
       # in generated/, which gxyexec can't reach.
       - name: Stop the exec user and check the output
+        id: isolation
         if: always() && env.WORK != ''
         run: |
           sudo pkill -KILL -u gxyexec || true
@@ -286,7 +292,7 @@ jobs:
           fi
           rm -f "$GITHUB_WORKSPACE/.validation-failed"
       - name: Handle generation failure
-        if: steps.generate.outcome == 'failure'
+        if: failure() && (steps.exec_user.outcome == 'failure' || steps.generate.outcome == 'failure' || steps.isolation.outcome == 'failure')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -300,7 +306,7 @@ jobs:
               gh issue edit $ISSUE_NUMBER --add-label "generation-failed"
           fi
       - name: Handle PR creation failure
-        if: steps.create_pr.outcome == 'failure'
+        if: failure() && steps.create_pr.outcome == 'failure'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |

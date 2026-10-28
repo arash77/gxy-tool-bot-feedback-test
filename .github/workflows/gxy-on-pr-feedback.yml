@@ -78,7 +78,8 @@ jobs:
       checks: read
     outputs:
       tool_dir: ${{ steps.find_tool_dir.outputs.tool_dir }}
-      outcome: ${{ steps.address.outcome }}
+      # A failed exec-user check fails the fix, so publish reports that.
+      outcome: ${{ steps.isolation.outcome == 'success' && steps.address.outcome || 'failure' }}
     steps:
       # refs/pull/<N>/head lives on the base repo, and also resolves for
       # workflow_dispatch runs, where pull_request is null.
@@ -103,7 +104,7 @@ jobs:
           f fake_llm.py > /tmp/fake_llm.py
           MODE=$(f mode 2>/dev/null || echo normal)
           nohup python3 /tmp/fake_llm.py 18765 /tmp/llm-requests.jsonl "$MODE" > /tmp/fake_llm.log 2>&1 &
-      - run: pip install --no-cache-dir "git+https://github.com/arash77/gxy-tool-bot@01f64f0a453364aa3450c16bfebd68b14d8f9df9"
+      - run: pip install --no-cache-dir "git+https://github.com/arash77/gxy-tool-bot@642ee46226edc43c8a9fe730e749238c7c199f55"
       - run: pip install "planemo>=0.75.43"
       - name: Install micromamba
         run: |
@@ -149,6 +150,10 @@ jobs:
         env:
           TOOL_DIR: ${{ steps.find_tool_dir.outputs.tool_dir }}
         run: |
+          # An older gxy-tool-bot ignores GXY_TOOL_BOT_EXEC_USER and would run the
+          # model's commands as this user, next to the key: refuse it.
+          python -c "from gxy_tool_bot.generator import _run_model_command" || {
+            echo "::error::This gxy-tool-bot can't run commands as another user; update it"; exit 1; }
           sudo useradd -M -s /usr/sbin/nologin gxyexec
           # The runner runs cron: without this, a crontab outlives the pkill below.
           echo gxyexec | sudo tee -a /etc/cron.deny >/dev/null
@@ -158,7 +163,9 @@ jobs:
           fi
           WORK=$(mktemp -d /tmp/gxy-work.XXXXXX)
           cp -a "tools/$TOOL_DIR" "$WORK/"
-          chmod -R a+rwX "$WORK"
+          # Not writable for gxyexec: it could swap the tool dir for a link. The bot
+          # opens the tool dir itself to it.
+          chmod 755 "$WORK"
           echo "GXY_TOOL_BOT_EXEC_USER=gxyexec" >> "$GITHUB_ENV"
           echo "WORK_TOOL_DIR=$WORK/$TOOL_DIR" >> "$GITHUB_ENV"
       - name: Address feedback

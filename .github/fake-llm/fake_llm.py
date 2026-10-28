@@ -26,6 +26,8 @@ if docker ps >/dev/null 2>&1; then echo "CHECK docker: yes"; else echo "CHECK do
 if touch probe-write.txt 2>/dev/null; then echo "CHECK can write tool dir: yes"; rm -f probe-write.txt; else echo "CHECK can write tool dir: no"; fi
 if touch ../outside.txt 2>/dev/null; then echo "CHECK can write tools/: YES"; rm -f ../outside.txt; else echo "CHECK can write tools/: no"; fi
 if touch "$GITHUB_WORKSPACE/README.md" 2>/dev/null; then echo "CHECK can write repo files: YES"; else echo "CHECK can write repo files: no"; fi
+echo "CHECK processes left from earlier commands: $(pgrep -u "$(id -un)" -x sleep | wc -l)"
+d=$(pwd -P); if mv "$d" "$d.x" 2>/dev/null; then echo "CHECK can replace the tool dir: YES"; mv "$d.x" "$d"; else echo "CHECK can replace the tool dir: no"; fi
 """
 
 PREFIX = {
