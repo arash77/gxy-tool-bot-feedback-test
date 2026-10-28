@@ -69,7 +69,7 @@ jobs:
           f fake_llm.py > /tmp/fake_llm.py
           MODE=$(f mode 2>/dev/null || echo normal)
           nohup python3 /tmp/fake_llm.py 18765 /tmp/llm-requests.jsonl "$MODE" > /tmp/fake_llm.log 2>&1 &
-      - run: pip install --no-cache-dir "git+https://github.com/arash77/gxy-tool-bot@01f64f0a453364aa3450c16bfebd68b14d8f9df9"
+      - run: pip install --no-cache-dir "git+https://github.com/arash77/gxy-tool-bot@289fac6f192c17b1cd1a8d4bfba112b2459aa952"
       - name: Detect outdated tools
         id: detect
         env:
@@ -137,7 +137,7 @@ jobs:
           f fake_llm.py > /tmp/fake_llm.py
           MODE=$(f mode 2>/dev/null || echo normal)
           nohup python3 /tmp/fake_llm.py 18765 /tmp/llm-requests.jsonl "$MODE" > /tmp/fake_llm.log 2>&1 &
-      - run: pip install --no-cache-dir "git+https://github.com/arash77/gxy-tool-bot@01f64f0a453364aa3450c16bfebd68b14d8f9df9"
+      - run: pip install --no-cache-dir "git+https://github.com/arash77/gxy-tool-bot@289fac6f192c17b1cd1a8d4bfba112b2459aa952"
       - run: pip install "planemo>=0.75.43"
       - name: Install micromamba
         run: |
@@ -192,6 +192,7 @@ jobs:
       # would be followed by the steps below). The steps below use a snapshot
       # in generated/, which gxyexec can't reach.
       - name: Stop the exec user and check the output
+        id: isolation
         if: always() && env.WORK != ''
         run: |
           sudo pkill -KILL -u gxyexec || true
@@ -318,7 +319,7 @@ jobs:
             ${{ github.workspace }}/tools/${{ matrix.tool.tool_dir }}/test-data/*.tar
           if-no-files-found: ignore
       - name: Report autoupdate failure
-        if: steps.autoupdate.outcome == 'failure' || steps.create_pr.outcome == 'failure'
+        if: failure() && (steps.autoupdate.outcome == 'failure' || steps.isolation.outcome == 'failure' || steps.create_pr.outcome == 'failure')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
