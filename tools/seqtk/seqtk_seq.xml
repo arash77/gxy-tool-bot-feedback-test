@@ -1,0 +1,23 @@
+<tool id="seqtk_seq_rc" name="seqtk seq -r" version="1.3+galaxy0" profile="23.0">
+    <description>reverse-complement sequences</description>
+    <requirements>
+        <requirement type="package" version="1.3">seqtk</requirement>
+    </requirements>
+    <command detect_errors="exit_code"><![CDATA[seqtk seq -r '$input' > '$output']]></command>
+    <inputs>
+        <param name="input" type="data" format="fasta" label="Sequences"/>
+    </inputs>
+    <outputs>
+        <data name="output" format="fasta"/>
+    </outputs>
+    <tests>
+        <test>
+            <param name="input" value="in.fa"/>
+            <output name="output" file="out.fa"/>
+        </test>
+    </tests>
+    <help><![CDATA[Reverse-complements each sequence with ``seqtk seq -r``.]]></help>
+    <citations>
+        <citation type="bibtex">@misc{seqtk, title={seqtk}, url={https://github.com/lh3/seqtk}}</citation>
+    </citations>
+</tool>

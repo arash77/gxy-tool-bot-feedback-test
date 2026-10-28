@@ -1,0 +1,27 @@
+# TEST: post a plan comment as github-actions[bot], as the planner would.
+name: "TEST: seed plan"
+on:
+  workflow_dispatch:
+    inputs:
+      issue:
+        required: true
+      plan:
+        description: file in .github/plans/
+        required: true
+permissions:
+  issues: write
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE: ${{ inputs.issue }}
+          PLAN: ${{ inputs.plan }}
+        run: |
+          [[ "$PLAN" =~ ^[a-z0-9_-]+\.md$ ]] || exit 1
+          printf '<!-- gxy-tool-bot-plan -->\n%s\n' "$(cat ".github/plans/$PLAN")" > /tmp/body.md
+          gh issue comment "$ISSUE" --body-file /tmp/body.md
