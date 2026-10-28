@@ -9,9 +9,11 @@ jobs:
       - run: |
           sudo useradd -M -s /usr/sbin/nologin gxyexec
           ls -l /bin/kill /usr/bin/kill 2>&1; /bin/kill --version 2>&1 | head -1
-          sudo -n -u gxyexec sh -c '(sleep 600 >/dev/null 2>&1 &)'
+
           echo "before: $(pgrep -u gxyexec -x sleep | wc -l)"
-          sudo -n -u gxyexec /bin/kill -KILL -1; echo "exit: $?"
-          sleep 1; echo "after (as in the bot): $(pgrep -u gxyexec -x sleep | wc -l)"
-          sudo -n -u gxyexec /bin/kill -s KILL -- -1; echo "exit: $?"
-          sleep 1; echo "after (-s KILL -- -1): $(pgrep -u gxyexec -x sleep | wc -l)"
+          for cmd in "/bin/kill -s KILL -- -1" "pkill -KILL -u gxyexec"; do
+            sudo -n -u gxyexec sh -c '(sleep 600 >/dev/null 2>&1 &)'
+            echo "before: $(pgrep -u gxyexec -x sleep | wc -l)"
+            sudo -n -u gxyexec $cmd; echo "exit: $?"
+            sleep 1; echo "after ($cmd): $(pgrep -u gxyexec -x sleep | wc -l)"
+          done
