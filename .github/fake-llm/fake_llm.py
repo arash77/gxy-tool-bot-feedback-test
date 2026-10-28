@@ -100,9 +100,12 @@ class Handler(BaseHTTPRequestHandler):
         body = self.rfile.read(int(self.headers["Content-Length"]))
         with open(LOG, "a") as f:
             f.write(body.decode() + "\n")
-        tools = {t["function"]["name"] for t in json.loads(body).get("tools", [])}
+        req = json.loads(body)
+        tools = {t["function"]["name"] for t in req.get("tools", [])}
         msg, finish = {"role": "assistant", "content": "Done."}, "stop"
-        gen = "set_tool_dir" in tools
+        # Feedback also offers set_tool_dir: tell the flows apart by the prompt.
+        first_user = next((m["content"] for m in req["messages"] if m["role"] == "user"), "")
+        gen = "set_tool_dir" in tools and "addressing feedback" not in str(first_user)
         for i, (name, args) in enumerate(GEN_STEPS if gen else STEPS):
             key = ("gen" if gen else "fb", i)
             if key in done or name not in tools:
