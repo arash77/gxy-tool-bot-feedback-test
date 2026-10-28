@@ -1,0 +1,29 @@
+<macros>
+    <token name="@TOOL_VERSION@">2.10.1</token>
+    <token name="@VERSION_SUFFIX@">0</token>
+    <token name="@PROFILE@">24.1</token>
+    <xml name="bio_tools">
+        <xrefs>
+            <xref type="bio.tools">seqkit</xref>
+        </xrefs>
+    </xml>
+    <xml name="requirements">
+        <requirements>
+            <requirement type="package" version="@TOOL_VERSION@">seqkit</requirement>
+        </requirements>
+    </xml>
+    <xml name="version_command">
+        <version_command>seqkit version</version_command>
+    </xml>
+    <xml name="citations">
+        <citations>
+            <citation type="doi">10.1371/journal.pone.0163962</citation>
+        </citations>
+    </xml>
+    <token name="@ATTRIBUTION@"><![CDATA[
+**Attribution**
+
+This Galaxy tool relies on the seqkit toolkit from `shenwei356/seqkit
+<https://github.com/shenwei356/seqkit/>`_.
+    ]]></token>
+</macros>

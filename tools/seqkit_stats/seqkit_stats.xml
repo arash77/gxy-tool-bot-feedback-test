@@ -1,0 +1,89 @@
+<tool id="seqkit_stats" name="seqkit stats" version="@TOOL_VERSION@+galaxy@VERSION_SUFFIX@" profile="@PROFILE@">
+    <description>simple statistics of FASTA/Q files</description>
+    <macros>
+        <import>macros.xml</import>
+    </macros>
+    <expand macro="bio_tools"/>
+    <expand macro="requirements"/>
+    <expand macro="version_command"/>
+    <command detect_errors="aggressive"><![CDATA[
+seqkit stats
+-T
+#if $all:
+    --all
+#end if
+--threads \${GALAXY_SLOTS:-4}
+'$input_files'
+> '$output'
+    ]]></command>
+    <inputs>
+        <param name="input_files" type="data" format="fasta,fastq,fasta.gz,fastq.gz,fastqsanger,fastqsanger.gz" multiple="true" label="Input FASTA/Q files" help="One or more FASTA or FASTQ files (plain or gzipped)"/>
+        <param argument="--all" type="boolean" truevalue="--all" falsevalue="" checked="false" label="All statistics" help="Output all statistics, including N50, number of non-ACGT characters, etc."/>
+    </inputs>
+    <outputs>
+        <data name="output" format="tabular" label="${tool.name} stats on ${on_string}"/>
+    </outputs>
+    <tests>
+        <test expect_num_outputs="1">
+            <param name="input_files" value="seqkit_stats.fa" ftype="fasta"/>
+            <output name="output">
+                <assert_contents>
+                    <has_n_columns n="8"/>
+                    <has_text text="seq1"/>
+                    <has_text text="seq2"/>
+                    <has_text text="7"/>
+                    <has_text text="5"/>
+                </assert_contents>
+            </output>
+        </test>
+        <test expect_num_outputs="1">
+            <param name="input_files" value="seqkit_stats.fa" ftype="fasta"/>
+            <param name="all" value="true"/>
+            <output name="output">
+                <assert_contents>
+                    <has_n_columns n="18"/>
+                    <has_text text="N50"/>
+                    <has_text text="seq1"/>
+                </assert_contents>
+            </output>
+        </test>
+    </tests>
+    <help format="markdown"><![CDATA[
+**What it does**
+
+`seqkit stats` computes simple statistics for FASTA or FASTQ files, including
+number of sequences, total length, minimum/average/maximum sequence length
+and N50 (with the "all statistics" option).
+
+The output is a tab-delimited table with one row per input file (or per
+sequence when the "all statistics" option is combined with per-sequence
+statistics).
+
+**Input**
+
+One or more FASTA or FASTQ datasets (plain or gzipped).
+
+**Output**
+
+A tabular dataset with columns such as:
+
+- `file` - input file name
+- `format` - detected format (FASTA or FASTQ)
+- `type` - sequence type (DNA, RNA, Protein or Unknow)
+- `num_seqs` - number of sequences
+- `sum_len` - total number of bases/residues
+- `min_len`, `avg_len`, `max_len` - sequence length statistics
+
+With the "all statistics" option, additional columns are added, e.g.
+`num_seqs` per type, `N50`, `Q1`, `Q2`, `Q3`, `sum_gap`, `N's` etc.
+
+-----
+
+**References**
+
+- seqkit documentation: https://bioinf.shenwei.me/seqkit/usage/#stats
+
+@ATTRIBUTION@
+    ]]></help>
+    <expand macro="citations"/>
+</tool>

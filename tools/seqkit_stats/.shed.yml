@@ -1,0 +1,11 @@
+categories:
+- Sequence Analysis
+description: simple statistics of FASTA/Q files
+homepage_url: https://bioinf.shenwei.me/seqkit/
+long_description: |
+  seqkit stats computes simple statistics (number of sequences, total length,
+  min/avg/max length, N50 and more) for one or more FASTA or FASTQ files.
+name: seqkit stats
+owner: arash77
+remote_repository_url: https://github.com/arash77/gxy-tool-bot-feedback-test/tree/main/tools/seqkit_stats
+type: unrestricted
