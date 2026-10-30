@@ -1,0 +1,46 @@
+<tool id="demo" name="Demo" version="0.1.0">
+    <description>copy a text file</description>
+    <creator>
+        <organization url="https://galaxyproject.org" name="Galaxy Community"/>
+    </creator>
+    <requirements>
+        <requirement type="package" version="9.5">coreutils</requirement>
+    </requirements>
+    <command detect_errors="aggressive"><![CDATA[cat '$input' > '$output']]></command>
+    <inputs>
+        <param name="input" type="data" format="txt" label="Input"/>
+    </inputs>
+    <outputs>
+        <data name="output" format="txt"/>
+    </outputs>
+    <tests>
+        <test expect_num_outputs="1">
+            <param name="input" value="in.txt"/>
+            <output name="output" file="in.txt">
+                <assert_contents>
+                    <has_text text="hello"/>
+                </assert_contents>
+            </output>
+        </test>
+        <test expect_num_outputs="1">
+            <param name="input" value="in2.txt"/>
+            <output name="output" file="in2.txt">
+                <assert_contents>
+                    <has_text text="goodbye world"/>
+                </assert_contents>
+            </output>
+        </test>
+    </tests>
+    <help format="markdown"><![CDATA[Copies the input. Edited 1793358490.]]></help>
+    <citations>
+        <!-- No publication exists for this demo tool; cite the Galaxy framework and the GNU coreutils manual (as suggested by the maintainer). -->
+        <citation type="doi">10.1093/nar/gkw343</citation>
+        <citation type="bibtex">@misc{coreutils,
+  author = {{Free Software Foundation}},
+  title = {GNU Coreutils Manual},
+  year = {2024},
+  url = {https://www.gnu.org/software/coreutils/manual/},
+  note = {GNU Coreutils version 9.5}
+}</citation>
+    </citations>
+</tool>
