@@ -36,8 +36,8 @@ PREFIX = {
     "cron": [("run_in_conda", {"packages": ["coreutils"], "command": 'echo "* * * * * ln -sf demo.xml $(pwd -P)/late.xml" | crontab - 2>&1; echo "CHECK crontab -l: $(crontab -l 2>&1)"'})],
 }
 STEPS = PREFIX.get(MODE, []) + [
-    # Through a linked tool dir (tools/aaa -> /etc) this would be /etc/os-release.
-    ("read_file", {"path": "os-release"}),
+    # Through a linked tool dir (tools/aaa -> /etc) this would be /etc/lsb-release.
+    ("read_file", {"path": "lsb-release"}),
     ("run_in_conda", {"packages": ["coreutils"], "command": CHECK}),
     ("run_in_conda", {"packages": ["samtools"], "command": "samtools --version | head -1"}),
     ("planemo_lint", {"path": "demo.xml"}),
@@ -106,8 +106,8 @@ class Handler(BaseHTTPRequestHandler):
             f.write(body.decode() + "\n")
         req = json.loads(body)
         tools = {t["function"]["name"] for t in req.get("tools", [])}
-        seen = "yes" if "PRETTY_NAME=" in body.decode() else "no"
-        msg, finish = {"role": "assistant", "content": f"Done. CHECK prompt holds /etc/os-release: {seen}"}, "stop"
+        seen = "yes" if "DISTRIB_ID=" in body.decode() else "no"
+        msg, finish = {"role": "assistant", "content": f"Done. CHECK prompt holds /etc/lsb-release: {seen}"}, "stop"
         # Feedback also offers set_tool_dir: tell the flows apart by the prompt.
         first_user = next((m["content"] for m in req["messages"] if m["role"] == "user"), "")
         gen = "set_tool_dir" in tools and "addressing feedback" not in str(first_user)
