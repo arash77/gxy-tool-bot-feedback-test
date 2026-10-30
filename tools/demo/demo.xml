@@ -31,7 +31,7 @@
             </output>
         </test>
     </tests>
-    <help format="markdown"><![CDATA[Copies the input. Edited 1793357711.]]></help>
+    <help format="markdown"><![CDATA[Copies the input. Edited 1793358490.]]></help>
     <citations>
         <!-- No publication exists for this demo tool; cite the Galaxy framework and the GNU coreutils manual (as suggested by the maintainer). -->
         <citation type="doi">10.1093/nar/gkw343</citation>
