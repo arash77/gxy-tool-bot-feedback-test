@@ -43,7 +43,10 @@ STEPS = PREFIX.get(MODE, []) + [
     ("planemo_lint", {"path": "demo.xml"}),
     ("planemo_test", {"path": "demo.xml"}),
     ("write_file", None),
-]
+] + ([
+    # write_file strips encoding declarations; a command doesn't, and planemo format fails on one.
+    ("run_in_conda", {"packages": ["coreutils"], "command": "sed -i '1i <?xml version=\"1.0\" encoding=\"UTF-8\"?>' demo.xml; head -1 demo.xml"}),
+] if MODE == "fmtcrash" else [])
 
 # generate (the bot offers set_tool_dir): write a small tool, then the same checks.
 TOOL = """<tool id="democat" name="Demo cat" version="0.1.0" profile="23.0">
