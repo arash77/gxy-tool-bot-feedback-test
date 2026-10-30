@@ -104,7 +104,8 @@ class Handler(BaseHTTPRequestHandler):
             f.write(body.decode() + "\n")
         req = json.loads(body)
         tools = {t["function"]["name"] for t in req.get("tools", [])}
-        msg, finish = {"role": "assistant", "content": "Done."}, "stop"
+        seen = "yes" if "PRETTY_NAME=" in body.decode() else "no"
+        msg, finish = {"role": "assistant", "content": f"Done. CHECK prompt holds /etc/os-release: {seen}"}, "stop"
         # Feedback also offers set_tool_dir: tell the flows apart by the prompt.
         first_user = next((m["content"] for m in req["messages"] if m["role"] == "user"), "")
         gen = "set_tool_dir" in tools and "addressing feedback" not in str(first_user)
@@ -118,6 +119,8 @@ class Handler(BaseHTTPRequestHandler):
                 xml = re.sub(r"(<help[^>]*><!\[CDATA\[).*?(\]\]></help>)",
                              rf"\g<1>Copies the input. Edited {int(time.time())}.\g<2>",
                              open("tools/demo/demo.xml").read(), flags=re.S)
+                if MODE == "fmtcrash":
+                    xml = '<?xml version="1.0" encoding="UTF-8"?>\n' + xml
                 args = {"path": "demo.xml", "content": xml}
             msg, finish = tool_call(f"{key[0]}{i}", name, args), "tool_calls"
             break
