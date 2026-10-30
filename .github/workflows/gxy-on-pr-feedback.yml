@@ -114,7 +114,7 @@ jobs:
           f fake_llm.py > /tmp/fake_llm.py
           MODE=$(f mode 2>/dev/null || echo normal)
           nohup python3 /tmp/fake_llm.py 18765 /tmp/llm-requests.jsonl "$MODE" > /tmp/fake_llm.log 2>&1 &
-      - run: pip install --no-cache-dir gxy-tool-bot==0.2.2
+      - run: pip install --no-cache-dir "git+https://github.com/arash77/gxy-tool-bot@399ea3e08a62c6b4b345d8f6c12a4d1ca3781b32"
       - run: pip install "planemo>=0.75.43"
       - name: Install micromamba
         run: |
