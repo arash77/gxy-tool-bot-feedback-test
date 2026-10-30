@@ -115,8 +115,8 @@ class Handler(BaseHTTPRequestHandler):
             done.add(key)
             if name == "write_file" and args is None:
                 # Rewrite the help text: an edit that keeps the tool valid every run.
-                xml = re.sub(r"<help><!\[CDATA\[.*?\]\]></help>",
-                             f"<help><![CDATA[Copies the input. Edited {int(time.time())}.]]></help>",
+                xml = re.sub(r"(<help[^>]*><!\[CDATA\[).*?(\]\]></help>)",
+                             rf"\g<1>Copies the input. Edited {int(time.time())}.\g<2>",
                              open("tools/demo/demo.xml").read(), flags=re.S)
                 args = {"path": "demo.xml", "content": xml}
             msg, finish = tool_call(f"{key[0]}{i}", name, args), "tool_calls"
