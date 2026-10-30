@@ -36,6 +36,8 @@ PREFIX = {
     "cron": [("run_in_conda", {"packages": ["coreutils"], "command": 'echo "* * * * * ln -sf demo.xml $(pwd -P)/late.xml" | crontab - 2>&1; echo "CHECK crontab -l: $(crontab -l 2>&1)"'})],
 }
 STEPS = PREFIX.get(MODE, []) + [
+    # Through a linked tool dir (tools/aaa -> /etc) this would be /etc/os-release.
+    ("read_file", {"path": "os-release"}),
     ("run_in_conda", {"packages": ["coreutils"], "command": CHECK}),
     ("run_in_conda", {"packages": ["samtools"], "command": "samtools --version | head -1"}),
     ("planemo_lint", {"path": "demo.xml"}),
