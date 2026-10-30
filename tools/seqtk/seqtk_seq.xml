@@ -16,7 +16,9 @@
             <output name="output" file="out.fa"/>
         </test>
     </tests>
-    <help><![CDATA[Reverse-complements each sequence with ``seqtk seq -r``.]]></help>
+    <help><![CDATA[
+Converts FASTQ to FASTA and back (contributor edit).
+Reverse-complements each sequence with ``seqtk seq -r``.]]></help>
     <citations>
         <citation type="bibtex">@misc{seqtk, title={seqtk}, url={https://github.com/lh3/seqtk}}</citation>
     </citations>
