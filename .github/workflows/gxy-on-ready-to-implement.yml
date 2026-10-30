@@ -1,4 +1,4 @@
-# TEST copy of gxy-tool-bot on-ready-to-implement.yml (branch exec-user).
+# TEST copy of galaxytools gxy-on-ready-to-implement.yml (fake LLM step added)
 on:
   issues:
     types: [labeled]
@@ -55,7 +55,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      # TEST: fake LLM inside the job, recording what the bot sends.
+      # TEST: fake LLM inside the job.
       - name: "TEST: start fake LLM"
         env:
           GH_TOKEN: ${{ github.token }}
@@ -64,7 +64,7 @@ jobs:
           f fake_llm.py > /tmp/fake_llm.py
           MODE=$(f mode 2>/dev/null || echo normal)
           nohup python3 /tmp/fake_llm.py 18765 /tmp/llm-requests.jsonl "$MODE" > /tmp/fake_llm.log 2>&1 &
-      - run: pip install --no-cache-dir "git+https://github.com/arash77/gxy-tool-bot@62d636c5bb2517dee53269acfaf76723cf1b6165"
+      - run: pip install --no-cache-dir gxy-tool-bot==0.2.2
       - run: pip install "planemo>=0.75.43"
       - name: Install micromamba
         run: |
@@ -155,13 +155,6 @@ jobs:
             rm -rf generated
             exit 1
           fi
-      # TEST: keep what the bot sent to the LLM.
-      - name: "TEST: upload LLM requests"
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: llm-requests
-          path: /tmp/llm-requests.jsonl
       - name: Format generated XML with planemo
         id: format
         if: steps.generate.outcome == 'success'
@@ -180,7 +173,9 @@ jobs:
           TOOL_DIR=$(cat generated/.tool-name)
           # .tool-name is agent-written and feeds 'rm -rf tools/$TOOL_DIR'
           # below — reject anything that isn't a plain directory name.
-          if [[ ! "$TOOL_DIR" =~ ^[A-Za-z0-9_.-]+$ ]]; then
+          # The first character must not be a dot: '.' and '..' would pass
+          # [A-Za-z0-9_.-] but resolve outside tools/.
+          if [[ ! "$TOOL_DIR" =~ ^[A-Za-z0-9_-][A-Za-z0-9_.-]*$ ]]; then
             echo "Refusing unsafe tool directory name: $TOOL_DIR"
             exit 1
           fi

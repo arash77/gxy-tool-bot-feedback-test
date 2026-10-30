@@ -1,4 +1,4 @@
-# TEST copy of gxy-tool-bot autoupdate.yml (branch exec-user).
+# TEST copy of galaxytools gxy-autoupdate.yml (fake LLM step added)
 # Scheduled autoupdate flow: detect outdated tool versions on conda and open
 # one PR per outdated tool — no issue or plan step. The PR is the review gate.
 #
@@ -19,6 +19,8 @@
 #     one reopens it, so maintainers decline a version by closing its PR;
 #   * a branch whose last commit wasn't authored by the bot → never overwritten.
 on:
+  schedule:
+    - cron: "0 4 * * *"  # daily, 04:00 UTC
   workflow_dispatch:
     inputs:
       tool_dir:
@@ -60,7 +62,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      # TEST: fake LLM inside the job, recording what the bot sends.
+      # TEST: fake LLM inside the job.
       - name: "TEST: start fake LLM"
         env:
           GH_TOKEN: ${{ github.token }}
@@ -69,7 +71,7 @@ jobs:
           f fake_llm.py > /tmp/fake_llm.py
           MODE=$(f mode 2>/dev/null || echo normal)
           nohup python3 /tmp/fake_llm.py 18765 /tmp/llm-requests.jsonl "$MODE" > /tmp/fake_llm.log 2>&1 &
-      - run: pip install --no-cache-dir "git+https://github.com/arash77/gxy-tool-bot@62d636c5bb2517dee53269acfaf76723cf1b6165"
+      - run: pip install --no-cache-dir gxy-tool-bot==0.2.2
       - name: Detect outdated tools
         id: detect
         env:
@@ -116,7 +118,7 @@ jobs:
       # One LLM job per outdated dir — cap concurrency so a run can't fire
       # dozens of concurrent agent runs/API calls (GitHub also caps matrices
       # at 256 jobs). autoupdate.max_tools_per_run bounds the total per run.
-      max-parallel: 5
+      max-parallel: 2
       matrix:
         tool: ${{ fromJSON(needs.detect.outputs.tools) }}
     env:
@@ -128,7 +130,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      # TEST: fake LLM inside the job, recording what the bot sends.
+      # TEST: fake LLM inside the job.
       - name: "TEST: start fake LLM"
         env:
           GH_TOKEN: ${{ github.token }}
@@ -137,7 +139,7 @@ jobs:
           f fake_llm.py > /tmp/fake_llm.py
           MODE=$(f mode 2>/dev/null || echo normal)
           nohup python3 /tmp/fake_llm.py 18765 /tmp/llm-requests.jsonl "$MODE" > /tmp/fake_llm.log 2>&1 &
-      - run: pip install --no-cache-dir "git+https://github.com/arash77/gxy-tool-bot@62d636c5bb2517dee53269acfaf76723cf1b6165"
+      - run: pip install --no-cache-dir gxy-tool-bot==0.2.2
       - run: pip install "planemo>=0.75.43"
       - name: Install micromamba
         run: |
@@ -216,13 +218,6 @@ jobs:
             rm -rf generated
             exit 1
           fi
-      # TEST: keep what the bot sent to the LLM.
-      - name: "TEST: upload LLM requests"
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: llm-requests
-          path: /tmp/llm-requests.jsonl
       - name: Check skip marker
         id: check
         if: steps.autoupdate.outcome == 'success'
