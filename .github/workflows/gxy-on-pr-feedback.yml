@@ -88,7 +88,7 @@ jobs:
       # makes its push fail instead of being reverted.
       sha: ${{ steps.pr.outputs.commit }}
       # A failed exec-user check or format fails the fix, so publish reports that.
-      outcome: ${{ steps.isolation.outcome == 'success' && steps.format.outcome != 'failure' && steps.address.outcome || 'failure' }}
+      outcome: ${{ steps.isolation.outcome == 'success' && steps.format.outcome == 'success' && steps.address.outcome || 'failure' }}
     steps:
       # refs/pull/<N>/head lives on the base repo, and also resolves for
       # workflow_dispatch runs, where pull_request is null.
