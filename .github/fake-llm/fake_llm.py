@@ -27,6 +27,7 @@ if touch probe-write.txt 2>/dev/null; then echo "CHECK can write tool dir: yes";
 if touch ../outside.txt 2>/dev/null; then echo "CHECK can write tools/: YES"; rm -f ../outside.txt; else echo "CHECK can write tools/: no"; fi
 if touch "$GITHUB_WORKSPACE/README.md" 2>/dev/null; then echo "CHECK can write repo files: YES"; else echo "CHECK can write repo files: no"; fi
 echo "CHECK processes left from earlier commands: $(pgrep -u "$(id -un)" -x sleep | wc -l)"
+if ls /home/runner >/dev/null 2>&1; then echo "CHECK can list /home/runner: YES"; else echo "CHECK can list /home/runner: no"; fi
 d=$(pwd -P); if mv "$d" "$d.x" 2>/dev/null; then echo "CHECK can replace the tool dir: YES"; mv "$d.x" "$d"; else echo "CHECK can replace the tool dir: no"; fi
 """
 
@@ -92,7 +93,9 @@ GEN_STEPS = [
     ("run_in_conda", {"packages": ["coreutils"], "command": CHECK}),
     ("planemo_lint", {"path": "democat.xml"}),
     ("planemo_test", {"path": "democat.xml"}),
-]
+] + ([
+    ("run_in_conda", {"packages": ["coreutils"], "command": "sed -i '1i <?xml version=\"1.0\" encoding=\"UTF-8\"?>' democat.xml; head -1 democat.xml"}),
+] if MODE == "fmtcrash" else [])
 done = set()
 
 

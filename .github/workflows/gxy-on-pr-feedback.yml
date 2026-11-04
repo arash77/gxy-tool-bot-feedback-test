@@ -173,6 +173,11 @@ jobs:
             echo "::error::gxyexec must have neither sudo nor docker"
             exit 1
           fi
+          # Everything of the runner's (workspace, RUNNER_TEMP) is under its home.
+          if sudo -u gxyexec test -r "$HOME" -o -x "$HOME"; then
+            echo "::error::gxyexec can reach $HOME"
+            exit 1
+          fi
           WORK=$(mktemp -d /tmp/gxy-work.XXXXXX)
           cp -a "tools/$TOOL_DIR" "$WORK/"
           # Not writable for gxyexec: it could swap the tool dir for a link. The bot
@@ -226,6 +231,7 @@ jobs:
           cp -a "$WORK_TOOL_DIR" "$RUNNER_TEMP/tool"
           # Links are allowed only where the PR has the same link (some tools
           # keep links in test-data).
+          # Keep this check in sync with "Check result" in the publish job.
           BAD=$(cd "$RUNNER_TEMP/tool" && find . ! -type f ! -type d | while IFS= read -r p; do
             orig="$GITHUB_WORKSPACE/tools/$TOOL_DIR/$p"
             if [ -L "$p" ] && [ -L "$orig" ] && [ "$(readlink "$p")" = "$(readlink "$orig")" ]; then continue; fi
@@ -307,6 +313,7 @@ jobs:
           fi
           # Only plain files and directories (and the PR's own links, as in
           # the fix job), and a sane size.
+          # Keep the link check in sync with the isolation step in the fix job.
           BAD=$(cd "$RESULT" && find . ! -type f ! -type d | while IFS= read -r p; do
             orig="$GITHUB_WORKSPACE/tools/$TOOL_DIR/$p"
             if [ -L "$p" ] && [ -L "$orig" ] && [ "$(readlink "$p")" = "$(readlink "$orig")" ]; then continue; fi
@@ -371,11 +378,15 @@ jobs:
       - name: Post comments
         if: always()
         run: |
-          # The bot's own comments (summary, validation errors, give-up reason).
-          shopt -s nullglob
-          for f in "$RUNNER_TEMP"/result/comments/*.md; do
-            gh pr comment $PR_NUMBER --body-file "$f"
-          done
+          # The bot's own comments (summary, validation errors, give-up reason):
+          # only if the change was pushed or the bot gave up, not when the
+          # push or the result check refused it.
+          if [ "${{ steps.commit.outcome }}" = "success" ] || [ -f "$RUNNER_TEMP/result/.gave-up" ]; then
+            shopt -s nullglob
+            for f in "$RUNNER_TEMP"/result/comments/*.md; do
+              gh pr comment $PR_NUMBER --body-file "$f"
+            done
+          fi
           if [ "${{ steps.commit.outcome }}" = "success" ] && [ -f "$RUNNER_TEMP/result/.validation-failed" ]; then
             gh pr comment $PR_NUMBER --body "⚠️ Validation issues were found after addressing feedback. Add the \`tool-bot:address-feedback\` (or \`address-feedback\`) label to have the bot attempt fixes again."
           fi
