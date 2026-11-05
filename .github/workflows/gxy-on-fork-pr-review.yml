@@ -120,7 +120,7 @@ jobs:
           f fake_llm.py > /tmp/fake_llm.py
           MODE=$(f mode 2>/dev/null || echo normal)
           nohup python3 /tmp/fake_llm.py 18765 /tmp/llm-requests.jsonl "$MODE" > /tmp/fake_llm.log 2>&1 &
-      - run: pip install --no-cache-dir gxy-tool-bot==0.2.2
+      - run: pip install --no-cache-dir gxy-tool-bot==0.2.3
       # The bot offers its planemo_test / run_in_conda (shell) tools whenever
       # planemo, micromamba or conda is on PATH. The runner image symlinks
       # /usr/bin/conda.
