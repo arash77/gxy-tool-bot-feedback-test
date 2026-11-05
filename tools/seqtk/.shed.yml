@@ -1,9 +1,9 @@
-name: seqtk_seq_rc
+name: democat
 owner: arash77
-description: Reverse-complement sequences with seqtk (test tool)
-long_description: Reverse-complement sequences with seqtk (test tool for gxy-tool-bot autoupdate).
+description: Copy a text file (test tool)
+long_description: Copy a text file (test tool).
 categories:
-  - Sequence Analysis
-homepage_url: https://github.com/lh3/seqtk
-remote_repository_url: https://github.com/arash77/gxy-tool-bot-feedback-test/tree/main/tools/seqtk
+  - Text Manipulation
+homepage_url: https://www.gnu.org/software/coreutils/
+remote_repository_url: https://github.com/arash77/gxy-tool-bot-feedback-test/tree/main/tools/democat
 type: unrestricted
