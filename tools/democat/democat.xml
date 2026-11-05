@@ -1,0 +1,22 @@
+<tool id="democat" name="Demo cat" version="0.1.0" profile="23.0">
+    <requirements>
+        <requirement type="package" version="9.5">coreutils</requirement>
+    </requirements>
+    <command detect_errors="exit_code"><![CDATA[cat '$input' > '$output']]></command>
+    <inputs>
+        <param name="input" type="data" format="txt" label="Input"/>
+    </inputs>
+    <outputs>
+        <data name="output" format="txt"/>
+    </outputs>
+    <tests>
+        <test>
+            <param name="input" value="in.txt"/>
+            <output name="output" file="in.txt"/>
+        </test>
+    </tests>
+    <help><![CDATA[Copies the input.]]></help>
+    <citations>
+        <citation type="bibtex">@misc{coreutils, title={GNU coreutils}, url={https://www.gnu.org/software/coreutils/}}</citation>
+    </citations>
+</tool>
